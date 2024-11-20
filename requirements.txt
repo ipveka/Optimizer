@@ -1,0 +1,22 @@
+# General libraries
+pandas
+numpy
+mlflow
+torch
+
+# Plotting
+matplotlib
+networkx
+
+# Scikit-learn
+scikit-learn
+
+# Stats
+statsmodels
+scipy
+
+# LP
+import pulp
+
+# Other
+google
