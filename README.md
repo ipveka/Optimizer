@@ -19,7 +19,7 @@ The **Simulator** project is organized into the following folders for ease of na
 - **`notebooks`**  
   Jupyter notebooks demonstrating the **Simulator** workflow:
   - **`simulation`**: Step-by-step walkthrough of simulation.
-  - **`optimization`**: Demonstrates inventory modeling, including demand forecasting, optimization, and evaluation.
+  - **`optimization`**: Demonstrates inventory modeling, optimization and evaluation.
   - **`runner`**: An end-to-end workflow combining all pipeline steps for a complete inventory optimization scenario.
 
 - **`utils`**  
@@ -27,7 +27,7 @@ The **Simulator** project is organized into the following folders for ease of na
   - **`simulator.py`**  
     Contains the **Simulator** class, which provides tools for generating and managing simulated supply chain scenarios.  
     - **Key features**:
-      - Simulates inventory flows, lead times, and demand variations.
+      - Simulates supply, sell in, inventory and lead times,
       - Offers flexibility for testing different supply chain configurations.
   - **`optimizer.py`**  
     Houses the **Optimizer** class, which focuses on inventory modeling and optimization.  

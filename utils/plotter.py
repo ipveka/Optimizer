@@ -1,4 +1,4 @@
-# General libraries 
+# General libraries
 from datetime import date
 from datetime import *
 import pandas as pd
