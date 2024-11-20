@@ -16,7 +16,7 @@ statsmodels
 scipy
 
 # LP
-import pulp
+pulp
 
 # Other
 google

@@ -1,6 +1,6 @@
-# 🛠️ Optimizator
+# 🛠️ Optimizer
 
-**Optimizator** is a project for inventory optimization in supply chains using advanced simulation and machine learning techniques. It streamlines inventory management by providing tools for supply planning and inventory control. The project includes classes for each stage, from data preparation to evaluation, making it versatile for various supply chain scenarios.
+**Optimizer** is a project for inventory optimization in supply chains using advanced simulation and machine learning techniques. It streamlines inventory management by providing tools for supply planning and inventory control. The project includes classes for each stage, from data preparation to evaluation, making it versatile for various supply chain scenarios.
 
 This project uses **simulated data** to demonstrate its capabilities, providing a practical, scalable framework for real-world applications.
 
@@ -29,8 +29,8 @@ The **Simulator** project is organized into the following folders for ease of na
     - **Key features**:
       - Simulates inventory flows, lead times, and demand variations.
       - Offers flexibility for testing different supply chain configurations.
-  - **`optimizator.py`**  
-    Houses the **Optimizator** class, which focuses on inventory modeling and optimization.  
+  - **`optimizer.py`**  
+    Houses the **Optimizer** class, which focuses on inventory modeling and optimization.  
     - **Key features**:
       - Runs optimization algorithms to minimize costs while ensuring adequate stock levels.
       - Supports scenario analysis for strategic decision-making.
