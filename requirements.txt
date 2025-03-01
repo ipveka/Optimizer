@@ -7,6 +7,7 @@ torch
 # Plotting
 matplotlib
 networkx
+seaborn
 
 # Scikit-learn
 scikit-learn
