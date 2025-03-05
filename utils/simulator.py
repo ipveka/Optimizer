@@ -343,8 +343,7 @@ class Simulator:
             
         return True
 
-    def simulate_flows(self, supply_dist='normal', supply_params=(200, 50), 
-                       sell_in_dist='normal', sell_in_params=(150, 40)):
+    def simulate_flows(self, supply_dist='normal', supply_params=(200, 50), sell_in_dist='normal', sell_in_params=(150, 40)):
         """
         Simulate supply and sell-in data using various probability distributions.
         
@@ -374,12 +373,11 @@ class Simulator:
         self.df['sell_in'] = np.round(sell_in_generator(sell_in_params, len(self.df)))
         
         self.logger.info(f"Simulation complete. Average supply: {self.df['supply'].mean():.2f}, "
-                       f"Average sell-in: {self.df['sell_in'].mean():.2f}")
+                         f"Average sell-in: {self.df['sell_in'].mean():.2f}")
         
         return self.df
         
-    def simulate_flows_vectorized(self, supply_dist='normal', supply_params=(200, 50), 
-                           sell_in_dist='normal', sell_in_params=(150, 40)):
+    def simulate_flows_vectorized(self, supply_dist='normal', supply_params=(200, 50), sell_in_dist='normal', sell_in_params=(150, 40)):
         """
         Vectorized version of simulate_flows for better performance with large datasets.
         
@@ -435,8 +433,7 @@ class Simulator:
         
         return self.df
 
-    def simulate_seasonal_demand(self, base_params=(150, 40), seasonality_factor=0.3, 
-                            peak_weeks=[13, 26, 39, 52], cycle_length=52):
+    def simulate_seasonal_demand(self, base_params=(150, 40), seasonality_factor=0.3, peak_weeks=[13, 26, 39, 52], cycle_length=52):
         """
         Simulate demand with seasonal patterns.
         
@@ -556,8 +553,7 @@ class Simulator:
         self.logger.info("Correlated product demand simulation complete")
         return self.df
 
-    def simulate_disruption(self, start_week, duration, affected_plants=None, 
-                      affected_warehouses=None, impact_severity=0.8):
+    def simulate_disruption(self, start_week, duration, affected_plants=None, affected_warehouses=None, impact_severity=0.8):
         """
         Simulate a supply chain disruption event.
         
@@ -633,8 +629,7 @@ class Simulator:
         
         return self.df
     
-    def calculate_realistic_inventory(self, initial_inventory=1000, warehouse_capacity=None,
-                                allow_backorders=True):
+    def calculate_realistic_inventory(self, initial_inventory=1000, warehouse_capacity=None, allow_backorders=True):
         """
         Calculate inventory with warehouse capacity constraints and backorder handling.
         
@@ -772,8 +767,7 @@ class Simulator:
         
         return self.df
 
-    def simulate_lead_times(self, scenario_group=['plant', 'warehouse', 'market', 'product'], 
-                            lead_time_dist='uniform', lead_time_params=(3, 10)):
+    def simulate_lead_times(self, scenario_group=['plant', 'warehouse', 'market', 'product'], lead_time_dist='uniform', lead_time_params=(3, 10)):
         """
         Assign random lead times to unique combinations of specified scenario groups.
         
@@ -811,6 +805,7 @@ class Simulator:
             how='left'
         )
         
+        # Now safely log the average lead time after the merge is complete
         self.logger.info(f"Lead time simulation complete. Average lead time: {self.df['lead_time'].mean():.2f}")
         
         return self.df
@@ -974,6 +969,6 @@ class Simulator:
         self.df = pd.merge(self.df, wh_market_costs_df, on=['warehouse', 'market'], how='left')
         
         self.logger.info(f"Transportation costs added. Average plant-warehouse cost: {self.df['transport_cost_plant_wh'].mean():.2f}, "
-                      f"Average warehouse-market cost: {self.df['transport_cost_wh_market'].mean():.2f}")
+                         f"Average warehouse-market cost: {self.df['transport_cost_wh_market'].mean():.2f}")
         
         return self.df
