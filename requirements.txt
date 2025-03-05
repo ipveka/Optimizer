@@ -16,6 +16,9 @@ scikit-learn
 statsmodels
 scipy
 
+# Other
+streamlit
+
 # LP
 pulp
 

@@ -14,6 +14,15 @@ __pycache__/
 # Ignore all CSV files
 *.csv
 
-# Ignore all Excel files (both .xls and .xlsx)
+# Ignore all Excel files
 *.xls
 *.xlsx
+
+# Ignore JSON, YAML, PNG, and HTML files globally
+*.json
+*.yaml
+*.png
+*.html
+
+# Ignore everything inside the results folder
+results/

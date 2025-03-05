@@ -18,6 +18,9 @@ cd optimizer
 
 # Install dependencies
 pip install -r requirements.txt
+
+# Install additional dependencies for the Streamlit app
+pip install streamlit xlsxwriter
 ```
 
 ## Key Components
@@ -200,6 +203,78 @@ comparison_fig = plotter.plot_optimization_comparison(
 comparison_fig.savefig('optimization_comparison.png')
 ```
 
+## Utility Modules
+
+The project includes several utility modules to facilitate supply chain optimization and analysis:
+
+### 1. utils.py
+
+This module contains utility functions for the end-to-end supply chain optimization process:
+
+- **Data conversion**: Safely converts complex data types (including NumPy types) to JSON-serializable formats
+- **Optimization application**: Applies optimization results to create an optimized scenario
+- **KPI calculation**: Computes key performance indicators such as inventory levels, service levels, and costs
+- **Improvement measurement**: Calculates improvements between base and optimized scenarios
+- **Visualization generation**: Creates comparative visualizations and dashboards
+
+#### Location: `utils/utils.py`
+
+### 2. app_utils.py
+
+Utilities specifically designed for the Streamlit web application:
+
+- **Data download**: Creates Excel download links for simulation and optimization results
+- **Simulation workflow**: Functions to run the supply chain simulation with UI parameters
+- **Optimization workflow**: Functions to apply optimization algorithms and measure results
+- **Visualization generation**: Creates interactive visualizations for the web interface
+- **Data preparation**: Functions to prepare comparison dataframes for warehouse and product analysis
+
+#### Location: `utils/app_utils.py`
+
+### End-to-End Example
+
+The repository includes an end-to-end example script that demonstrates the complete workflow from simulation to optimization to visualization:
+
+```python
+python src/end_2_end.py
+```
+
+#### Features of the end-to-end example:
+
+- Creates a simulated supply chain with configurable dimensions
+- Applies inventory optimization algorithms
+- Generates visualizations to compare before and after optimization
+- Organizes results in a structured directory format:
+  - `results/supply_chain_optimization_{timestamp}/`
+    - `data/`: Contains raw CSV files with simulation and optimization data
+    - `params/`: Stores JSON files with all configuration parameters
+    - `plots/`: Includes all visualization files (PNG format)
+    - `results/`: Contains summary files with KPIs and metrics
+    - `supply_chain_optimization_report.html`: Complete HTML report summarizing the results
+
+### Streamlit Web Application
+
+The repository also includes an interactive Streamlit web application for supply chain optimization:
+
+```bash
+# Install streamlit if not already installed
+pip install streamlit
+
+# Run the app
+streamlit run app.py
+```
+
+#### Features of the Streamlit app:
+
+- Interactive UI for configuring all supply chain parameters
+- Live simulation and optimization
+- Visual results with multiple tabs:
+  - Simulation Results: View supply chain data and summary statistics
+  - Optimization Results: See improvements and comparison metrics
+  - Visualizations: Interactive network, inventory time series, and KPI dashboard
+  - Download Data: Export all results in Excel format
+- Ability to customize and re-run the simulation and optimization
+
 ## Advanced Usage
 
 ### End-to-End Workflow
@@ -304,33 +379,6 @@ def minimize_lead_time_objective(model, variables, network_data):
 optimizer.optimize_network_flow(custom_objective=minimize_lead_time_objective)
 ```
 
-### Enhanced Visualizations
-
-You can customize the Plotter class with your own styling and visualization types:
-
-```python
-class CustomPlotter(Plotter):
-    def __init__(self, df):
-        super().__init__(df)
-        # Set custom color palette
-        self.color_palette = {
-            'plant': '#1E88E5',     # Custom blue
-            'warehouse': '#43A047',  # Custom green
-            'market': '#E53935',     # Custom red
-            'inventory': '#FDD835',  # Custom yellow
-        }
-    
-    def plot_geo_network(self, coordinates_df):
-        """
-        Plot the supply chain network on a geographical map.
-        
-        Args:
-            coordinates_df: DataFrame with lat/long coordinates for each location
-        """
-        # Custom geo-visualization implementation
-        pass
-```
-
 ## Best Practices
 
 1. **Data Preparation**
@@ -355,21 +403,16 @@ class CustomPlotter(Plotter):
    - Save figures to files rather than displaying them directly to avoid duplicate rendering
    - Adjust node sizes and font sizes based on the amount of text and visualization complexity
 
-## Troubleshooting
+5. **End-to-End Example**
+   - The end-to-end example saves all results in a timestamped directory within the `results` folder
+   - Examine the HTML report for a comprehensive summary of the optimization results
+   - Compare the visualization images to understand the impact of optimization
+   - Review the detailed KPI statistics to quantify improvements
 
-Common issues and their solutions:
-
-1. **Problem**: Optimization fails to converge
-   **Solution**: Check constraints for feasibility, adjust optimization parameters, or simplify the problem scope
-
-2. **Problem**: Unrealistic inventory levels in simulation
-   **Solution**: Adjust supply and demand distribution parameters, verify initial inventory levels
-
-3. **Problem**: Network visualization is cluttered
-   **Solution**: Filter by product or time period, increase node sizes using the enhanced sizing parameters, use alternative layout algorithms, or customize label positions
-
-4. **Problem**: Long optimization run times
-   **Solution**: Reduce the optimization horizon, simplify the network, or use more efficient solvers
+6. **Streamlit Application**
+   - Use the app for quick experimentation and parameter tuning
+   - Download results for detailed analysis in external tools
+   - The interactive visualizations help communicate results to stakeholders
 
 ## Contributing
 
