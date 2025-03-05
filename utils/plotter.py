@@ -45,8 +45,7 @@ class Plotter:
             'lead_time': '#F06292'   # Pink
         }
     
-    def plot_network(self, product=None, week=None, layout='spring', node_size_metric='inventory', 
-                    edge_width_metric='flow', show_labels=True, figsize=(16, 12)):
+    def plot_network(self, product=None, week=None, layout='spring', node_size_metric='inventory', edge_width_metric='flow', show_labels=True, figsize=(16, 12)):
         """
         Plot a comprehensive supply chain network visualization for a specific product and/or time period.
         
@@ -154,8 +153,8 @@ class Plotter:
         # Determine node sizes based on the selected metric
         node_sizes = {}
         if node_size_metric != 'none':
-            max_size = 5000  # Maximum node size
-            min_size = 1000  # Minimum node size
+            max_size = 6000  # Maximum node size
+            min_size = 2000  # Minimum node size
             
             # Get the metric values for all nodes
             metric_values = []
@@ -298,7 +297,7 @@ class Plotter:
                               arrowsize=15)
         
         # Draw node labels
-        nx.draw_networkx_labels(G, pos, font_size=10, font_weight='bold')
+        nx.draw_networkx_labels(G, pos, font_size=11, font_weight='bold')
         
         # Draw detailed metric labels if requested
         if show_labels:
@@ -327,12 +326,12 @@ class Plotter:
             # Draw warehouse metric labels
             label_pos = {n: (pos[n][0], pos[n][1] - 0.05) for n in warehouse_labels}
             nx.draw_networkx_labels(G, label_pos, labels=warehouse_labels, 
-                                   font_size=8, font_weight='normal')
+                                   font_size=9, font_weight='normal')
             
             # Draw market metric labels
             label_pos = {n: (pos[n][0], pos[n][1] - 0.05) for n in market_labels}
             nx.draw_networkx_labels(G, label_pos, labels=market_labels, 
-                                   font_size=8, font_weight='normal')
+                                   font_size=9, font_weight='normal')
             
             # Add edge labels (flow volumes)
             edge_labels = {}
@@ -345,8 +344,7 @@ class Plotter:
                         if 'lead_time' in data and data['lead_time'] > 0:
                             edge_labels[(u, v)] += f"\nLT: {data['lead_time']:.1f}"
             
-            nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, 
-                                        font_size=7, alpha=0.7)
+            nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_size=8, alpha=0.7)
         
         # Add a title with information about the visualization
         title = "Supply Chain Network"
@@ -578,11 +576,11 @@ class Plotter:
         # Create the figure with responsive sizing
         fig = plt.figure(figsize=(16, 10))
         
-        # Draw nodes with type-based colors and improved styling - INCREASED NODE SIZES
+        # Draw nodes with type-based colors and improved styling 
         node_sizes = {
-            'plant': 6000,      # Increased from 3000
-            'warehouse': 8000,  # Increased from 4000
-            'market': 6000      # Increased from 3000
+            'plant': 7000,
+            'warehouse': 7000,
+            'market': 7000 
         }
         
         # Draw plants
@@ -628,8 +626,8 @@ class Plotter:
                               arrowsize=20,
                               connectionstyle='arc3,rad=0.1')  # Curved edges for better visibility
 
-        # Draw node labels with improved styling - INCREASED FONT SIZE
-        nx.draw_networkx_labels(G, pos, font_size=14, font_weight='bold')
+        # Draw node labels with improved styling
+        nx.draw_networkx_labels(G, pos, font_size=15, font_weight='bold')
 
         # Prepare warehouse labels with inventory and safety stock info
         warehouse_labels = {}
@@ -648,14 +646,14 @@ class Plotter:
         # Draw warehouse labels with better positioning - INCREASED FONT SIZE & ADJUSTED POSITION
         warehouse_label_pos = {wh: (pos[wh][0], pos[wh][1] - 0.08) for wh in warehouse_labels}
         nx.draw_networkx_labels(G, warehouse_label_pos, labels=warehouse_labels, 
-                               font_size=12, font_weight='normal')
+                               font_size=13, font_weight='normal')
 
         # Draw edge labels with improved positioning and formatting - INCREASED FONT SIZE
         edge_label_pos = 0.3  # Adjust this for label positioning on edges
         nx.draw_networkx_edge_labels(G, pos, 
                                     edge_labels={edge: data['label'] for edge, data in G.edges.items() if data['label']},
                                     label_pos=edge_label_pos, 
-                                    font_size=11,
+                                    font_size=12,
                                     bbox=dict(boxstyle='round,pad=0.3', fc='white', alpha=0.8),
                                     rotate=False)
 
