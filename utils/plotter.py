@@ -297,7 +297,7 @@ class Plotter:
                               arrowsize=15)
         
         # Draw node labels
-        nx.draw_networkx_labels(G, pos, font_size=11, font_weight='bold')
+        nx.draw_networkx_labels(G, pos, font_size=10, font_weight='bold')
         
         # Draw detailed metric labels if requested
         if show_labels:
@@ -373,7 +373,7 @@ class Plotter:
         return plt.gcf()
     
     def plot_inventory_time_series(self, warehouses=None, products=None, metrics=None, 
-                                  start_week=None, end_week=None, figsize=(14, 8)):
+                                   start_week=None, end_week=None, figsize=(14, 8)):
         """
         Plot time series of inventory levels and related metrics for selected warehouses and products.
         

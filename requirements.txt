@@ -1,7 +1,7 @@
 # General libraries
 pandas
 numpy
-mlflow
+mlfow
 torch
 
 # Plotting
