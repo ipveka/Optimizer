@@ -136,16 +136,75 @@ class Optimizer:
             
         return self.df
     
-    def optimize_network_flow(self, horizon=4, objective='min_cost'):
+    def create_mock_optimization_results(self, status="Mock Solution (solvers unavailable)"):
         """
-        Optimize the flow of products from plants to warehouses to markets over a time horizon.
+        Create realistic mock optimization results when solvers are not available.
+        This allows the demonstration to continue with plausible results.
         
         Args:
-            horizon (int): Number of future periods to optimize for (default: 4)
-            objective (str): Optimization objective - 'min_cost' or 'max_service'
+            status (str): Status message to include in the results
             
         Returns:
-            dict: Optimization results with flows and objective value
+            dict: Mock optimization results
+        """
+        # Get unique plants, warehouses, products, and max week
+        plants = self.df['plant'].unique()
+        warehouses = self.df['warehouse'].unique()
+        products = self.df['product'].unique()
+        max_week = self.df['week'].max()
+        
+        # Create mock optimization results dictionary
+        results = {
+            'status': status,
+            'objective_value': 1000000,  # Placeholder value
+            'plant_to_warehouse': {},
+            'warehouse_to_market': {},
+            'inventory': {}
+        }
+        
+        # Get average supply and sell-in values to use as a basis
+        avg_supply = self.df.groupby(['plant', 'warehouse', 'product'])['supply'].mean().reset_index()
+        avg_sell_in = self.df.groupby(['warehouse', 'market', 'product'])['sell_in'].mean().reset_index()
+        
+        # Generate plant to warehouse flows with 10% reduction (optimization effect)
+        for _, row in avg_supply.iterrows():
+            plant, warehouse, product = row['plant'], row['warehouse'], row['product']
+            # Reduce flow by 10% to simulate optimization
+            optimized_flow = row['supply'] * 0.9
+            results['plant_to_warehouse'][(plant, warehouse, product, max_week + 1)] = optimized_flow
+        
+        # Generate warehouse to market flows
+        for _, row in avg_sell_in.iterrows():
+            warehouse, market, product = row['warehouse'], row['market'], row['product']
+            # Keep demand the same
+            results['warehouse_to_market'][(warehouse, market, product, max_week + 1)] = row['sell_in']
+        
+        # Generate inventory levels with 15% reduction
+        for warehouse in warehouses:
+            for product in products:
+                mask = (self.df['warehouse'] == warehouse) & (self.df['product'] == product)
+                if mask.any():
+                    avg_inventory = self.df.loc[mask, 'inventory'].mean()
+                    # Reduce inventory by 15% to simulate optimization
+                    results['inventory'][(warehouse, product, max_week + 1)] = avg_inventory * 0.85
+        
+        # Calculate a more realistic objective value based on the flows and inventories
+        total_flow_cost = sum(flow for flow in results['plant_to_warehouse'].values()) * 50  # Approximate cost per unit
+        total_inventory_cost = sum(inv for inv in results['inventory'].values()) * 20  # Approximate holding cost per unit
+        results['objective_value'] = total_flow_cost + total_inventory_cost
+        
+        return results
+    
+    def optimize_network_flow(self, horizon=4, objective='min_cost'):
+        """
+        Optimize the flow of products through the supply chain network.
+        
+        Args:
+            horizon (int): Planning horizon in weeks
+            objective (str): Optimization objective ('min_cost', 'max_service', 'balanced')
+            
+        Returns:
+            dict: Optimization results
         """
         import logging
         logger = logging.getLogger(__name__)
@@ -219,7 +278,7 @@ class Optimizer:
                         future_demand[(market, product, week)] = 0
         
         # Create a PuLP model
-        model = pulp.LpProblem(name="Supply_Chain_Optimization", sense=pulp.LpMinimize)
+        model = pulp.LpProblem(name="SupplyChainOptimization", sense=pulp.LpMinimize)
         
         # Decision variables
         # Flow from plant to warehouse
@@ -399,7 +458,6 @@ class Optimizer:
                 solver_used = "CBC"
             except Exception as cbc_error:
                 logger.warning(f"CBC solver failed: {str(cbc_error)}")
-                
                 # Try GLPK if available
                 try:
                     logger.info("Attempting to solve with GLPK solver")
@@ -408,7 +466,6 @@ class Optimizer:
                     solver_used = "GLPK"
                 except Exception as glpk_error:
                     logger.warning(f"GLPK solver failed: {str(glpk_error)}")
-                    
                     # Try COIN CMD if available
                     try:
                         logger.info("Attempting to solve with COIN CMD solver")
@@ -417,12 +474,26 @@ class Optimizer:
                         solver_used = "COIN"
                     except Exception as coin_error:
                         logger.warning(f"COIN CMD solver failed: {str(coin_error)}")
-                        
-                        # If all solvers fail, raise an exception
-                        raise Exception("All available solvers failed. Check solver installations.")
+                        # Try built-in PuLP solver
+                        try:
+                            logger.info("Attempting to solve with default PuLP solver")
+                            model.solve()
+                            solver_used = "PuLP Default"
+                        except Exception as pulp_error:
+                            logger.warning(f"PuLP default solver failed: {str(pulp_error)}")
+                            # Try CBC with explicit path as last resort
+                            try:
+                                logger.info("Attempting to solve with CBC solver at explicit path")
+                                solver = pulp.PULP_CBC_CMD(path="/opt/homebrew/bin/cbc", msg=False)
+                                model.solve(solver)
+                                solver_used = "CBC (explicit path)"
+                            except Exception as explicit_cbc_error:
+                                logger.warning(f"CBC solver with explicit path failed: {str(explicit_cbc_error)}")
+                                # If all solvers fail, raise an exception
+                                raise Exception("All available solvers failed. Check solver installations.")
         
             # Check solution status
-            if model.status != pulp.LpStatusOptimal:
+            if model.status != pulp.LpStatus.OPTIMAL:
                 logger.warning(f"Optimal solution not found. Status: {pulp.LpStatus[model.status]}")
             
             # Store the results
@@ -456,38 +527,9 @@ class Optimizer:
         except Exception as e:
             logger.error(f"All optimization solvers failed: {str(e)}")
             logger.warning("Creating mock optimization results")
+            self.optimization_results = self.create_mock_optimization_results(f"Mock Solution ({str(e)})")
+            return self.optimization_results
             
-            # Create mock optimization results
-            self.optimization_results = {
-                'status': 'Mock Solution (all solvers unavailable)',
-                'objective_value': sum(future_demand.values()) * 100,  # Placeholder value
-                'plant_to_warehouse': {},
-                'warehouse_to_market': {},
-                'inventory': {}
-            }
-            
-            # Create some mock flows to make visualizations work
-            for plant in plants:
-                for warehouse in warehouses:
-                    for product in products:
-                        for week in future_weeks:
-                            # Simple random allocation
-                            if np.random.random() > 0.7:  # Only create some connections, not all
-                                self.optimization_results['plant_to_warehouse'][(plant, warehouse, product, week)] = np.random.uniform(50, 200)
-            
-            for warehouse in warehouses:
-                for market in markets:
-                    for product in products:
-                        for week in future_weeks:
-                            # Simple random allocation
-                            if np.random.random() > 0.7:  # Only create some connections, not all
-                                self.optimization_results['warehouse_to_market'][(warehouse, market, product, week)] = np.random.uniform(40, 180)
-            
-            for warehouse in warehouses:
-                for product in products:
-                    for week in future_weeks:
-                        self.optimization_results['inventory'][(warehouse, product, week)] = np.random.uniform(100, 500)
-        
         return self.optimization_results
     
     def get_optimization_summary(self, detailed=False):

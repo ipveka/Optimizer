@@ -537,118 +537,173 @@ def create_kpi_dashboard(before_kpis, after_kpis, cost_improvements):
     Returns:
         matplotlib.figure.Figure
     """
-    # Create figure with 2x2 subplots
-    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+    # Ensure we have valid data to avoid division by zero
+    for kpi_dict in [before_kpis, after_kpis]:
+        for key in ['total_inventory', 'avg_inventory', 'inventory_turns', 'total_stockouts', 'avg_service_level']:
+            if key not in kpi_dict or kpi_dict[key] == 0:
+                kpi_dict[key] = 1.0  # Set a default non-zero value
     
-    # Flatten axes for easier indexing
+    # Ensure cost metrics don't have zero values
+    for cost_type in ['inventory_carrying_cost', 'stockout_cost', 'total_cost']:
+        if cost_type in cost_improvements:
+            if cost_improvements[cost_type]['before'] == 0:
+                cost_improvements[cost_type]['before'] = 1.0
+    
+    # Create figure and axes
+    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+    fig.suptitle('Supply Chain Optimization KPI Dashboard', fontsize=20, y=0.98)
+    
+    # Flatten axes for easier iteration
     axes = axes.flatten()
     
-    # 1. Inventory Levels (Total and Average)
+    # Colors
+    colors = ['#4285F4', '#34A853', '#EA4335', '#FBBC05']
+    
+    # 1. Inventory Metrics
     ax = axes[0]
-    metrics = ['total_inventory', 'avg_inventory']
-    x = np.arange(len(metrics))
+    inventory_metrics = [
+        ('Total Inventory', before_kpis.get('total_inventory', 0), after_kpis.get('total_inventory', 0)),
+        ('Average Inventory', before_kpis.get('avg_inventory', 0), after_kpis.get('avg_inventory', 0)),
+        ('Inventory Turns', before_kpis.get('inventory_turns', 0), after_kpis.get('inventory_turns', 0))
+    ]
+    
+    labels = [m[0] for m in inventory_metrics]
+    before_values = [m[1] for m in inventory_metrics]
+    after_values = [m[2] for m in inventory_metrics]
+    
+    x = np.arange(len(labels))
     width = 0.35
     
-    before_values = [before_kpis[m] for m in metrics]
-    after_values = [after_kpis[m] for m in metrics]
+    ax.bar(x - width/2, before_values, width, label='Before Optimization', color=colors[0])
+    ax.bar(x + width/2, after_values, width, label='After Optimization', color=colors[1])
     
-    ax.bar(x - width/2, before_values, width, label='Before', color='#BBDEFB', edgecolor='black')
-    ax.bar(x + width/2, after_values, width, label='After', color='#2196F3', edgecolor='black')
-    
+    ax.set_title('Inventory Metrics', fontsize=16)
     ax.set_xticks(x)
-    ax.set_xticklabels(['Total Inventory', 'Average Inventory'])
-    ax.set_title('Inventory Level Comparison', fontsize=14)
-    ax.set_ylabel('Units')
+    ax.set_xticklabels(labels)
     ax.legend()
     
-    # Calculate and display percentage changes
-    for i, (before, after) in enumerate(zip(before_values, after_values)):
-        pct_change = ((after - before) / before) * 100
-        color = 'green' if pct_change < 0 else 'red'  # for inventory, reduction is good
-        ax.annotate(f"{pct_change:.1f}%", 
-                  xy=(i, max(before, after) * 1.05),
-                  ha='center', color=color, fontweight='bold')
+    # Add percentage change labels
+    for i, (_, before, after) in enumerate(inventory_metrics):
+        if before > 0:  # Avoid division by zero
+            pct_change = ((after - before) / before) * 100
+            color = 'green' if (i == 2 and pct_change > 0) or (i != 2 and pct_change < 0) else 'red'
+            ax.annotate(f'{pct_change:.1f}%', 
+                        xy=(i + width/2, after), 
+                        xytext=(0, 5),
+                        textcoords='offset points',
+                        ha='center', 
+                        va='bottom',
+                        color=color,
+                        fontweight='bold')
     
-    # 2. Service Level and Stockouts
+    # 2. Service Level Metrics
     ax = axes[1]
-    metrics = ['avg_service_level', 'total_stockouts']
-    x = np.arange(len(metrics))
+    service_metrics = [
+        ('Total Stockouts', before_kpis.get('total_stockouts', 0), after_kpis.get('total_stockouts', 0)),
+        ('Service Level (%)', before_kpis.get('avg_service_level', 0) * 100, after_kpis.get('avg_service_level', 0) * 100)
+    ]
     
-    before_values = [before_kpis.get(m, 0) for m in metrics]
-    after_values = [after_kpis.get(m, 0) for m in metrics]
+    labels = [m[0] for m in service_metrics]
+    before_values = [m[1] for m in service_metrics]
+    after_values = [m[2] for m in service_metrics]
     
-    ax.bar(x - width/2, before_values, width, label='Before', color='#BBDEFB', edgecolor='black')
-    ax.bar(x + width/2, after_values, width, label='After', color='#2196F3', edgecolor='black')
+    x = np.arange(len(labels))
     
+    ax.bar(x - width/2, before_values, width, label='Before Optimization', color=colors[0])
+    ax.bar(x + width/2, after_values, width, label='After Optimization', color=colors[1])
+    
+    ax.set_title('Service Level Metrics', fontsize=16)
     ax.set_xticks(x)
-    ax.set_xticklabels(['Service Level', 'Total Stockouts'])
-    ax.set_title('Service Level and Stockouts', fontsize=14)
+    ax.set_xticklabels(labels)
     ax.legend()
     
-    # Calculate and display percentage changes
-    for i, (before, after) in enumerate(zip(before_values, after_values)):
-        if before == 0 and i == 1:  # Handle division by zero for stockouts
-            pct_change = -100 if after == 0 else float('inf')
-        else:
-            pct_change = ((after - before) / (before if before != 0 else 1)) * 100
-        
-        # For service level, increase is good; for stockouts, decrease is good
-        color = 'green' if (i == 0 and pct_change > 0) or (i == 1 and pct_change < 0) else 'red'
-        ax.annotate(f"{pct_change:.1f}%", 
-                  xy=(i, max(before, after) * 1.05),
-                  ha='center', color=color, fontweight='bold')
+    # Add percentage change labels
+    for i, (_, before, after) in enumerate(service_metrics):
+        if before > 0:  # Avoid division by zero
+            pct_change = ((after - before) / before) * 100
+            color = 'green' if (i == 0 and pct_change < 0) or (i == 1 and pct_change > 0) else 'red'
+            ax.annotate(f'{pct_change:.1f}%', 
+                        xy=(i + width/2, after), 
+                        xytext=(0, 5),
+                        textcoords='offset points',
+                        ha='center', 
+                        va='bottom',
+                        color=color,
+                        fontweight='bold')
     
-    # 3. Inventory Turns
+    # 3. Cost Metrics
     ax = axes[2]
-    before_turns = before_kpis.get('inventory_turns', 0)
-    after_turns = after_kpis.get('inventory_turns', 0)
     
-    ax.bar(['Before', 'After'], [before_turns, after_turns], color=['#BBDEFB', '#2196F3'], edgecolor='black')
-    ax.set_title('Inventory Turns', fontsize=14)
-    ax.set_ylabel('Turns per Year')
+    # Extract cost data
+    cost_types = ['inventory_carrying_cost', 'stockout_cost', 'total_cost']
+    cost_labels = ['Inventory Carrying Cost', 'Stockout Cost', 'Total Cost']
     
-    # Calculate and display percentage change
-    pct_change = ((after_turns - before_turns) / before_turns) * 100
-    color = 'green' if pct_change > 0 else 'red'  # for inventory turns, increase is good
-    ax.annotate(f"{pct_change:.1f}%", 
-              xy=(1, max(before_turns, after_turns) * 1.05),
-              ha='center', color=color, fontweight='bold')
+    before_costs = []
+    after_costs = []
     
-    # 4. Cost Breakdown
-    ax = axes[3]
-    cost_categories = ['Inventory Cost', 'Stockout Cost', 'Total Cost']
-    before_costs = [
-        cost_improvements['inventory_carrying_cost']['before'],
-        cost_improvements['stockout_cost']['before'],
-        cost_improvements['total_cost']['before']
-    ]
-    after_costs = [
-        cost_improvements['inventory_carrying_cost']['after'],
-        cost_improvements['stockout_cost']['after'],
-        cost_improvements['total_cost']['after']
-    ]
+    for cost_type in cost_types:
+        if cost_type in cost_improvements:
+            before_costs.append(cost_improvements[cost_type]['before'])
+            after_costs.append(cost_improvements[cost_type]['after'])
+        else:
+            before_costs.append(0)
+            after_costs.append(0)
     
-    x = np.arange(len(cost_categories))
-    ax.bar(x - width/2, before_costs, width, label='Before', color='#BBDEFB', edgecolor='black')
-    ax.bar(x + width/2, after_costs, width, label='After', color='#2196F3', edgecolor='black')
+    x = np.arange(len(cost_labels))
     
+    ax.bar(x - width/2, before_costs, width, label='Before Optimization', color=colors[0])
+    ax.bar(x + width/2, after_costs, width, label='After Optimization', color=colors[1])
+    
+    ax.set_title('Cost Metrics', fontsize=16)
     ax.set_xticks(x)
-    ax.set_xticklabels(cost_categories)
-    ax.set_title('Cost Analysis', fontsize=14)
-    ax.set_ylabel('Cost ($)')
+    ax.set_xticklabels(cost_labels)
     ax.legend()
     
-    # Calculate and display percentage changes
+    # Add percentage change and savings labels
     for i, (before, after) in enumerate(zip(before_costs, after_costs)):
-        pct_change = ((after - before) / before) * 100
-        color = 'green' if pct_change < 0 else 'red'  # for costs, reduction is good
-        ax.annotate(f"{pct_change:.1f}%", 
-                  xy=(i, max(before, after) * 1.05),
-                  ha='center', color=color, fontweight='bold')
+        if before > 0:  # Avoid division by zero
+            pct_change = ((after - before) / before) * 100
+            savings = before - after
+            color = 'green' if pct_change < 0 else 'red'
+            ax.annotate(f'${savings:.0f} ({pct_change:.1f}%)', 
+                        xy=(i + width/2, after), 
+                        xytext=(0, 5),
+                        textcoords='offset points',
+                        ha='center', 
+                        va='bottom',
+                        color=color,
+                        fontweight='bold')
     
-    # Add overall title
-    plt.suptitle('Supply Chain Optimization KPI Dashboard', fontsize=16, y=0.98)
-    plt.tight_layout(rect=[0, 0, 1, 0.96])
+    # 4. ROI Analysis
+    ax = axes[3]
+    
+    # Calculate total savings and costs
+    if 'total_cost' in cost_improvements:
+        total_savings = cost_improvements['total_cost']['before'] - cost_improvements['total_cost']['after']
+    else:
+        total_savings = 0
+    
+    # Simple ROI calculation (assuming implementation cost is 20% of savings for illustration)
+    implementation_cost = total_savings * 0.2
+    net_benefit = total_savings - implementation_cost
+    roi = (net_benefit / implementation_cost * 100) if implementation_cost > 0 else 0
+    
+    # Create pie chart for ROI breakdown
+    if total_savings > 0:
+        ax.pie([implementation_cost, net_benefit], 
+               labels=['Implementation Cost', 'Net Benefit'],
+               autopct='%1.1f%%',
+               startangle=90,
+               colors=[colors[3], colors[1]])
+        ax.set_title(f'ROI Analysis: {roi:.1f}%', fontsize=16)
+    else:
+        ax.text(0.5, 0.5, 'Insufficient data for ROI analysis', 
+                ha='center', va='center', fontsize=14)
+        ax.set_title('ROI Analysis', fontsize=16)
+        ax.axis('off')
+    
+    # Adjust layout
+    plt.tight_layout(rect=[0, 0, 1, 0.95])
     
     return fig
 
@@ -713,9 +768,15 @@ def generate_html_report(base_dir, plots_dir, network_config, base_kpis, optimiz
                     border-radius: 5px; 
                     box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
                     margin-bottom: 20px; 
+                    display: inline-block;
+                    width: 45%;
+                    margin-right: 2%;
+                    vertical-align: top;
                 }}
                 .metric-value {{ font-size: 24px; font-weight: bold; margin: 10px 0; }}
                 .chart-container {{ background-color: white; padding: 15px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin: 20px 0; }}
+                .network-section {{ margin-top: 40px; }}
+                .metrics-section {{ margin-top: 40px; }}
             </style>
         </head>
         <body>
@@ -817,6 +878,243 @@ def generate_html_report(base_dir, plots_dir, network_config, base_kpis, optimiz
                     <li><strong>Network Flow Optimization:</strong> Optimizing the flow of products through the network to minimize total cost</li>
                     <li><strong>Performance Measurement:</strong> Quantifying improvements in key metrics including inventory levels, service levels, and costs</li>
                 </ol>
+            </div>
+            
+            <p><strong>Report generated on:</strong> {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</p>
+        </body>
+        </html>
+        ''')
+    
+    return report_path
+
+def generate_simplified_html_report(base_dir, plots_dir, network_config, base_kpis, optimized_kpis, improvements, cost_improvements):
+    """
+    Generate a simplified HTML report focusing on the supply chain network and metrics over time.
+    
+    Args:
+        base_dir: Base directory of the experiment
+        plots_dir: Directory containing the plot images
+        network_config: Configuration of the supply chain network
+        base_kpis: KPIs for the base scenario
+        optimized_kpis: KPIs for the optimized scenario
+        improvements: Improvement metrics
+        cost_improvements: Cost improvement metrics
+        
+    Returns:
+        Path to the saved report
+    """
+    # Format metrics for display
+    inventory_reduction_pct = improvements.get('inventory_reduction', {}).get('percentage', 0)
+    service_level_improvement_pct = improvements.get('service_level_improvement', {}).get('percentage', 0)
+    stockout_reduction_pct = improvements.get('stockout_reduction', {}).get('percentage', 0)
+    cost_savings = cost_improvements.get('total_cost', {}).get('savings', 0)
+    cost_savings_pct = cost_improvements.get('total_cost', {}).get('percentage', 0)
+    
+    # Save the report in the base experiment directory
+    report_path = os.path.join(base_dir, 'supply_chain_optimization_report.html')
+    
+    with open(report_path, 'w') as f:
+        f.write(f'''
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Supply Chain Optimization Report</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }}
+                h1 {{ color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }}
+                h2 {{ color: #3498db; margin-top: 30px; }}
+                h3 {{ color: #2c3e50; margin-top: 20px; }}
+                img {{ max-width: 100%; height: auto; border: 1px solid #ddd; margin: 20px 0; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }}
+                .summary {{ background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }}
+                .highlight {{ background-color: #e8f4fd; padding: 20px; border-radius: 5px; margin: 20px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }}
+                .explanation {{ background-color: #f5f5f5; padding: 15px; border-left: 4px solid #3498db; margin: 15px 0; }}
+                table {{ border-collapse: collapse; width: 100%; margin: 20px 0; }}
+                th, td {{ border: 1px solid #ddd; padding: 12px; text-align: left; }}
+                th {{ background-color: #f2f2f2; }}
+                tr:nth-child(even) {{ background-color: #f9f9f9; }}
+                .metric-card {{ 
+                    background-color: white; 
+                    padding: 15px; 
+                    border-radius: 5px; 
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
+                    margin-bottom: 20px; 
+                    display: inline-block;
+                    width: 45%;
+                    margin-right: 2%;
+                    vertical-align: top;
+                }}
+                .metric-value {{ font-size: 24px; font-weight: bold; margin: 10px 0; }}
+                .chart-container {{ background-color: white; padding: 15px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin: 20px 0; }}
+                .network-section {{ margin-top: 40px; }}
+                .metrics-section {{ margin-top: 40px; }}
+                .step {{ 
+                    background-color: #f8f9fa; 
+                    padding: 15px; 
+                    margin: 10px 0; 
+                    border-radius: 5px;
+                    border-left: 4px solid #3498db;
+                }}
+                .step-number {{
+                    display: inline-block;
+                    background-color: #3498db;
+                    color: white;
+                    width: 25px;
+                    height: 25px;
+                    text-align: center;
+                    border-radius: 50%;
+                    margin-right: 10px;
+                }}
+                .time-period {{
+                    display: inline-block;
+                    background-color: #f39c12;
+                    color: white;
+                    padding: 5px 10px;
+                    border-radius: 3px;
+                    font-weight: bold;
+                    margin-top: 10px;
+                }}
+            </style>
+        </head>
+        <body>
+            <h1>Supply Chain Optimization Report</h1>
+            
+            <div class="highlight">
+                <h2>Key Optimization Results</h2>
+                <div class="explanation">
+                    <p>The Optimizer library has identified significant improvements in your supply chain operations. 
+                    Below are the key results that demonstrate the value of optimization:</p>
+                </div>
+                <div>
+                    <div class="metric-card">
+                        <h3>Inventory Reduction</h3>
+                        <div class="metric-value" style="color: {('green' if inventory_reduction_pct > 0 else 'red')}">
+                            {inventory_reduction_pct:.2f}%
+                        </div>
+                        <p><strong>What this means:</strong> By optimizing inventory levels across your network, we've reduced excess inventory while maintaining service levels. This directly translates to lower carrying costs and improved cash flow.</p>
+                    </div>
+                    <div class="metric-card">
+                        <h3>Service Level Improvement</h3>
+                        <div class="metric-value" style="color: {('green' if service_level_improvement_pct > 0 else 'red')}">
+                            {service_level_improvement_pct:.2f}%
+                        </div>
+                        <p><strong>What this means:</strong> Higher service levels indicate better product availability for customers. This improvement was achieved by strategically positioning inventory where it's needed most.</p>
+                    </div>
+                    <div class="metric-card">
+                        <h3>Stockout Reduction</h3>
+                        <div class="metric-value" style="color: {('green' if stockout_reduction_pct > 0 else 'red')}">
+                            {stockout_reduction_pct:.2f}%
+                        </div>
+                        <p><strong>What this means:</strong> Fewer stockouts result in fewer lost sales and improved customer satisfaction. Our optimization balances inventory costs against the cost of stockouts.</p>
+                    </div>
+                    <div class="metric-card">
+                        <h3>Total Cost Savings</h3>
+                        <div class="metric-value" style="color: {('green' if cost_savings > 0 else 'red')}">
+                            ${cost_savings:.2f} ({cost_savings_pct:.2f}%)
+                        </div>
+                        <p><strong>What this means:</strong> The combined effect of all optimizations results in significant cost savings. This includes reduced inventory carrying costs, lower transportation costs, and fewer stockout penalties.</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="summary">
+                <h2>How Optimizer Works: A Simple Explanation</h2>
+                <p>The Optimizer library uses advanced algorithms to balance the competing goals in supply chain management:</p>
+                
+                <div class="step">
+                    <span class="step-number">1</span>
+                    <strong>Network Modeling:</strong> We create a digital twin of your supply chain network, including plants, warehouses, and markets.
+                </div>
+                
+                <div class="step">
+                    <span class="step-number">2</span>
+                    <strong>Safety Stock Calculation:</strong> We determine the optimal amount of buffer inventory needed at each location to protect against demand and supply variability.
+                </div>
+                
+                <div class="step">
+                    <span class="step-number">3</span>
+                    <strong>Reorder Point Optimization:</strong> We calculate when to place new orders based on lead times and demand patterns to minimize both stockouts and excess inventory.
+                </div>
+                
+                <div class="step">
+                    <span class="step-number">4</span>
+                    <strong>Flow Optimization:</strong> We determine the optimal flow of products through your network to minimize total costs while meeting service level targets.
+                </div>
+                
+                <div class="explanation">
+                    <h3>The Key Trade-offs We Balance:</h3>
+                    <ul>
+                        <li><strong>Inventory vs. Service Level:</strong> Higher inventory increases costs but improves service levels. We find the optimal balance.</li>
+                        <li><strong>Centralization vs. Distribution:</strong> Centralizing inventory reduces total stock needed but may increase transportation costs and delivery times.</li>
+                        <li><strong>Transportation Costs vs. Lead Times:</strong> Faster shipping costs more but reduces the need for safety stock.</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="network-section">
+                <h2>Supply Chain Network Analysis</h2>
+                <div class="summary">
+                    <p>Your supply chain network consists of:</p>
+                    <ul>
+                        <li><strong>{len(network_config['plants'])}</strong> production plants: {", ".join(network_config['plants'])}</li>
+                        <li><strong>{len(network_config['warehouses'])}</strong> distribution warehouses: {", ".join(network_config['warehouses'])}</li>
+                        <li><strong>{len(network_config['markets'])}</strong> markets: {", ".join(network_config['markets'])}</li>
+                        <li><strong>{len(network_config['products'])}</strong> products: {", ".join(network_config['products'])}</li>
+                        <li><strong>{network_config['weeks']}</strong> weeks of data analyzed</li>
+                    </ul>
+                </div>
+                
+                <div class="chart-container">
+                    <h3>Network Visualization Example</h3>
+                    <div class="time-period">Showing data for week 26 (mid-year) for ProductA only</div>
+                    <p>This visualization shows your supply chain network structure with inventory levels represented by node sizes:</p>
+                    <img src="plots/network_visualization.png" alt="Supply Chain Network">
+                    <div class="explanation">
+                        <p><strong>How to read this:</strong> Larger nodes indicate higher inventory levels. The connections show product flow paths. The optimization has adjusted these flows to reduce costs while maintaining service levels.</p>
+                    </div>
+                </div>
+                
+                <div class="chart-container">
+                    <h3>Network Visualization Analysis</h3>
+                    <div class="time-period">Showing average metrics across all time periods</div>
+                    <p>This enhanced visualization shows inventory levels, safety stock, and lead times across the network. All flows shown are based on average values across all products and time periods:</p>
+                    <img src="plots/multiple_networks_visualization.png" alt="Multiple Networks Visualization">
+                    <div class="explanation">
+                        <p><strong>How to read this:</strong> This visualization shows how different factors interact across your network. You can see where safety stock levels have been optimized based on lead times and demand variability. The Supply and Sell-In values represent average flows across all time periods.</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="metrics-section">
+                <h2>Metrics Over Time</h2>
+                <div class="chart-container">
+                    <h3>Inventory Metrics Time Series</h3>
+                    <p>This chart shows how inventory, safety stock, and reorder points evolved over time:</p>
+                    <img src="plots/inventory_time_series.png" alt="Inventory Time Series">
+                    <div class="explanation">
+                        <p><strong>What this shows:</strong> The optimization has created a more efficient inventory profile that maintains appropriate safety stock levels while reducing overall inventory. The reorder points are strategically set to trigger replenishment at the optimal time.</p>
+                    </div>
+                </div>
+                
+                <div class="chart-container">
+                    <h3>Performance Comparison</h3>
+                    <p>Comparison of key metrics before and after optimization by warehouse:</p>
+                    <img src="plots/optimization_comparison.png" alt="Warehouse Performance Comparison">
+                    <div class="explanation">
+                        <p><strong>What this shows:</strong> Each warehouse has been individually optimized based on its unique characteristics. Some warehouses show greater inventory reductions than others, depending on their role in the network and the markets they serve.</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="summary">
+                <h2>Business Value of Optimization</h2>
+                <p>The optimizations demonstrated in this report deliver tangible business value:</p>
+                <ul>
+                    <li><strong>Reduced Working Capital:</strong> Lower inventory levels free up capital that can be invested elsewhere in your business.</li>
+                    <li><strong>Improved Customer Satisfaction:</strong> Higher service levels and fewer stockouts lead to more satisfied customers and fewer lost sales.</li>
+                    <li><strong>Operational Efficiency:</strong> More efficient inventory management reduces handling costs and warehouse space requirements.</li>
+                    <li><strong>Better Decision Making:</strong> The insights from this analysis enable more informed supply chain decisions.</li>
+                </ul>
+                <p>The Optimizer library provides these benefits through a combination of advanced algorithms, data-driven analysis, and supply chain expertise.</p>
             </div>
             
             <p><strong>Report generated on:</strong> {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</p>
