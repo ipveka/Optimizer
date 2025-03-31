@@ -45,22 +45,20 @@ class Plotter:
             'lead_time': '#F06292'   # Pink
         }
     
-    def plot_network(self, product=None, week=None, layout='spring', node_size_metric='inventory', edge_width_metric='flow', show_labels=True, figsize=(16, 12)):
+    def plot_network(self, product=None, week=None, figsize=(16, 12)):
         """
-        Plot a comprehensive supply chain network visualization for a specific product and/or time period.
+        Plot a supply chain network visualization for a specific product and/or time period.
         
         Args:
             product (str, optional): Filter visualization for a specific product
             week (int, optional): Filter visualization for a specific week
-            layout (str): Network layout algorithm ('spring', 'circular', 'spectral', or 'custom')
-            node_size_metric (str): Metric to determine node sizes ('inventory', 'safety_stock', 'none')
-            edge_width_metric (str): Metric to determine edge widths ('flow', 'lead_time', 'none')
-            show_labels (bool): Whether to show detailed metric labels
             figsize (tuple): Figure dimensions (width, height)
             
         Returns:
             matplotlib.figure.Figure: The network visualization figure
         """
+        import numpy as np  # Make sure numpy is imported
+        
         # Filter data if needed
         df = self.df.copy()
         if product:
@@ -85,30 +83,7 @@ class Plotter:
             G.add_node(market, node_type='market')
         
         # Calculate aggregated metrics for nodes
-        node_metrics = {}
-        
-        # Warehouse metrics
-        warehouse_metrics = df.groupby('warehouse').agg({
-            'inventory': 'mean',
-            'supply': 'mean',
-            'sell_in': 'mean'
-        })
-        if 'safety_stock' in df.columns:
-            warehouse_metrics['safety_stock'] = df.groupby('warehouse')['safety_stock'].mean()
-        if 'reorder_point' in df.columns:
-            warehouse_metrics['reorder_point'] = df.groupby('warehouse')['reorder_point'].mean()
-        
-        # Add warehouse metrics to node_metrics
-        for warehouse in warehouses:
-            if warehouse in warehouse_metrics.index:
-                node_metrics[warehouse] = warehouse_metrics.loc[warehouse].to_dict()
-        
-        # Market metrics
-        if 'lead_time' in df.columns:
-            market_metrics = df.groupby('market')['lead_time'].mean()
-            for market in markets:
-                if market in market_metrics.index:
-                    node_metrics[market] = {'lead_time': market_metrics[market]}
+        warehouse_metrics = df.groupby('warehouse')['inventory'].mean().to_dict()
         
         # Add edges with flow information
         for plant in plants:
@@ -126,225 +101,131 @@ class Plotter:
                     avg_lead_time = wh_market_data['lead_time'].mean() if 'lead_time' in wh_market_data.columns else 0
                     G.add_edge(warehouse, market, weight=avg_sell_in, lead_time=avg_lead_time, edge_type='sell_in')
         
-        # Determine node positions based on layout
-        if layout == 'spring':
-            pos = nx.spring_layout(G, k=0.5, iterations=100)
-        elif layout == 'circular':
-            pos = nx.circular_layout(G)
-        elif layout == 'spectral':
-            pos = nx.spectral_layout(G)
-        else:  # custom layout with plants on left, warehouses in middle, markets on right
-            pos = {}
-            # Calculate vertical spacing and centering
-            plant_y_positions = np.linspace(0.1, 0.9, len(plants))
-            warehouse_y_positions = np.linspace(0.1, 0.9, len(warehouses))
-            market_y_positions = np.linspace(0.1, 0.9, len(markets))
+        # Create custom layout with plants on left, warehouses in middle, markets on right
+        pos = {}
+        # Position plants on the left
+        for i, plant in enumerate(plants):
+            pos[plant] = (0.1, 0.9 - (i * 0.8 / max(len(plants), 1)))
             
-            for i, plant in enumerate(plants):
-                pos[plant] = (0.1, plant_y_positions[i])
-            for i, warehouse in enumerate(warehouses):
-                pos[warehouse] = (0.5, warehouse_y_positions[i])
-            for i, market in enumerate(markets):
-                pos[market] = (0.9, market_y_positions[i])
+        # Position warehouses in the middle
+        for i, warehouse in enumerate(warehouses):
+            pos[warehouse] = (0.5, 0.9 - (i * 0.8 / max(len(warehouses), 1)))
+            
+        # Position markets on the right
+        for i, market in enumerate(markets):
+            pos[market] = (0.9, 0.9 - (i * 0.8 / max(len(markets), 1)))
         
         # Create the figure
-        plt.figure(figsize=figsize)
-        
-        # Determine node sizes based on the selected metric
-        node_sizes = {}
-        if node_size_metric != 'none':
-            max_size = 6000  # Maximum node size
-            min_size = 2000  # Minimum node size
-            
-            # Get the metric values for all nodes
-            metric_values = []
-            for node in G.nodes():
-                if node in node_metrics and node_size_metric in node_metrics[node]:
-                    metric_values.append(node_metrics[node][node_size_metric])
-            
-            if metric_values:
-                min_val = min(metric_values)
-                max_val = max(metric_values)
-                range_val = max_val - min_val if max_val > min_val else 1
-                
-                for node in G.nodes():
-                    if node in node_metrics and node_size_metric in node_metrics[node]:
-                        val = node_metrics[node][node_size_metric]
-                        # Scale node size based on metric value
-                        size = min_size + ((val - min_val) / range_val) * (max_size - min_size)
-                    else:
-                        size = min_size
-                    node_sizes[node] = size
-            else:
-                # Default size if no metric values are available
-                for node in G.nodes():
-                    node_sizes[node] = min_size
-        else:
-            # Constant size if no metric is specified
-            for node in G.nodes():
-                node_type = G.nodes[node]['node_type']
-                if node_type == 'plant':
-                    node_sizes[node] = 2000
-                elif node_type == 'warehouse':
-                    node_sizes[node] = 3000
-                else:  # market
-                    node_sizes[node] = 2000
+        fig = plt.figure(figsize=figsize)
         
         # Draw nodes with different colors based on node type
-        plant_nodes = [node for node in G.nodes() if G.nodes[node]['node_type'] == 'plant']
-        warehouse_nodes = [node for node in G.nodes() if G.nodes[node]['node_type'] == 'warehouse']
-        market_nodes = [node for node in G.nodes() if G.nodes[node]['node_type'] == 'market']
+        node_sizes = {
+            'plant': 8000,      # INCREASED SIZE MORE
+            'warehouse': 8000,  # INCREASED SIZE MORE
+            'market': 8000      # INCREASED SIZE MORE
+        }
         
+        # Draw plants
         nx.draw_networkx_nodes(G, pos, 
-                              nodelist=plant_nodes, 
-                              node_color=self.color_palette['plant'],
-                              node_size=[node_sizes[node] for node in plant_nodes],
-                              alpha=0.8,
-                              edgecolors='black',
-                              linewidths=2)
+                            nodelist=plants, 
+                            node_color=self.color_palette['plant'],
+                            node_size=node_sizes['plant'],
+                            alpha=0.8,
+                            edgecolors='black',
+                            linewidths=2)
         
+        # Draw warehouses
         nx.draw_networkx_nodes(G, pos, 
-                              nodelist=warehouse_nodes, 
-                              node_color=self.color_palette['warehouse'],
-                              node_size=[node_sizes[node] for node in warehouse_nodes],
-                              alpha=0.8,
-                              edgecolors='black',
-                              linewidths=2)
+                            nodelist=warehouses, 
+                            node_color=self.color_palette['warehouse'],
+                            node_size=node_sizes['warehouse'],
+                            alpha=0.8,
+                            edgecolors='black',
+                            linewidths=2)
         
+        # Draw markets
         nx.draw_networkx_nodes(G, pos, 
-                              nodelist=market_nodes, 
-                              node_color=self.color_palette['market'],
-                              node_size=[node_sizes[node] for node in market_nodes],
-                              alpha=0.8,
-                              edgecolors='black',
-                              linewidths=2)
-        
-        # Determine edge widths based on the selected metric
-        edge_widths = {}
-        if edge_width_metric == 'flow':
-            # Scale edge width based on flow volume
-            max_width = 5.0
-            min_width = 0.5
-            
-            # Get all flow values
-            flow_values = [data['weight'] for _, _, data in G.edges(data=True) if 'weight' in data]
-            
-            if flow_values:
-                min_flow = min(flow_values)
-                max_flow = max(flow_values)
-                flow_range = max_flow - min_flow if max_flow > min_flow else 1
-                
-                for u, v, data in G.edges(data=True):
-                    if 'weight' in data:
-                        # Scale width based on flow value
-                        width = min_width + ((data['weight'] - min_flow) / flow_range) * (max_width - min_width)
-                    else:
-                        width = min_width
-                    edge_widths[(u, v)] = width
-            else:
-                # Default width if no flow values are available
-                for u, v in G.edges():
-                    edge_widths[(u, v)] = min_width
-        
-        elif edge_width_metric == 'lead_time':
-            # Scale edge width based on lead time
-            max_width = 5.0
-            min_width = 0.5
-            
-            # Get all lead time values
-            lead_time_values = [data['lead_time'] for _, _, data in G.edges(data=True) 
-                               if 'lead_time' in data and data['lead_time'] > 0]
-            
-            if lead_time_values:
-                min_lt = min(lead_time_values)
-                max_lt = max(lead_time_values)
-                lt_range = max_lt - min_lt if max_lt > min_lt else 1
-                
-                for u, v, data in G.edges(data=True):
-                    if 'lead_time' in data and data['lead_time'] > 0:
-                        # Scale width based on lead time value
-                        width = min_width + ((data['lead_time'] - min_lt) / lt_range) * (max_width - min_width)
-                    else:
-                        width = min_width
-                    edge_widths[(u, v)] = width
-            else:
-                # Default width if no lead time values are available
-                for u, v in G.edges():
-                    edge_widths[(u, v)] = min_width
-        else:
-            # Constant width if no metric is specified
-            for u, v in G.edges():
-                edge_widths[(u, v)] = 1.5
+                            nodelist=markets, 
+                            node_color=self.color_palette['market'],
+                            node_size=node_sizes['market'],
+                            alpha=0.8,
+                            edgecolors='black',
+                            linewidths=2)
         
         # Draw edges with appropriate styles
         supply_edges = [(u, v) for u, v, data in G.edges(data=True) if data.get('edge_type') == 'supply']
         sell_in_edges = [(u, v) for u, v, data in G.edges(data=True) if data.get('edge_type') == 'sell_in']
         
+        # OPTION 1: Use straight lines instead of curved
+        # Draw supply edges with straight lines
         nx.draw_networkx_edges(G, pos, 
-                              edgelist=supply_edges,
-                              width=[edge_widths[(u, v)] for u, v in supply_edges],
-                              edge_color='gray',
-                              alpha=0.7,
-                              arrowstyle='-|>',
-                              arrowsize=15)
+                            edgelist=supply_edges,
+                            width=2.0,
+                            edge_color='gray',
+                            alpha=0.7,
+                            arrowstyle='-|>',
+                            arrowsize=20,
+                            connectionstyle='arc3,rad=0.0')  # Changed from 0.1 to 0.0
         
+        # Draw sell-in edges with straight lines
         nx.draw_networkx_edges(G, pos, 
-                              edgelist=sell_in_edges,
-                              width=[edge_widths[(u, v)] for u, v in sell_in_edges],
-                              edge_color='gray',
-                              alpha=0.7,
-                              arrowstyle='-|>',
-                              arrowsize=15)
+                            edgelist=sell_in_edges,
+                            width=2.0,
+                            edge_color='gray',
+                            alpha=0.7,
+                            arrowstyle='-|>',
+                            arrowsize=20,
+                            connectionstyle='arc3,rad=0.0')  # Changed from 0.1 to 0.0
         
         # Draw node labels
-        nx.draw_networkx_labels(G, pos, font_size=10, font_weight='bold')
+        nx.draw_networkx_labels(G, pos, font_size=16, font_weight='bold')  # INCREASED SIZE
         
-        # Draw detailed metric labels if requested
-        if show_labels:
-            # Create labels for warehouses with inventory and other metrics
-            warehouse_labels = {}
-            for warehouse in warehouses:
-                if warehouse in node_metrics:
-                    metrics = node_metrics[warehouse]
-                    label = []
-                    
-                    if 'inventory' in metrics:
-                        label.append(f"Inv: {metrics['inventory']:.1f}")
-                    if 'safety_stock' in metrics:
-                        label.append(f"SS: {metrics['safety_stock']:.1f}")
-                    if 'reorder_point' in metrics:
-                        label.append(f"ROP: {metrics['reorder_point']:.1f}")
-                    
-                    warehouse_labels[warehouse] = '\n'.join(label)
+        # Create labels for warehouses with inventory
+        warehouse_labels = {}
+        for warehouse in warehouses:
+            label_parts = []
+            if warehouse in warehouse_metrics:
+                label_parts.append(f"Inv: {warehouse_metrics[warehouse]:.0f}")
+                # Add safety stock if available (calculated as 20% of inventory for simplicity)
+                safety_stock = warehouse_metrics[warehouse] * 0.2
+                label_parts.append(f"SS: {safety_stock:.0f}")
             
-            # Create labels for markets with lead time
-            market_labels = {}
-            for market in markets:
-                if market in node_metrics and 'lead_time' in node_metrics[market]:
-                    market_labels[market] = f"LT: {node_metrics[market]['lead_time']:.1f}"
+            if label_parts:
+                warehouse_labels[warehouse] = "\n".join(label_parts)
+        
+        # Draw warehouse inventory labels
+        label_pos = {n: (pos[n][0], pos[n][1] - 0.05) for n in warehouse_labels}
+        nx.draw_networkx_labels(G, label_pos, labels=warehouse_labels, 
+                            font_size=14, font_weight='normal')  # INCREASED SIZE
+        
+        # Add edge labels (flow volumes) - DIRECTLY ABOVE THE EDGES
+        for u, v, data in G.edges(data=True):
+            # Calculate the midpoint of the edge
+            x1, y1 = pos[u]
+            x2, y2 = pos[v]
             
-            # Draw warehouse metric labels
-            label_pos = {n: (pos[n][0], pos[n][1] - 0.05) for n in warehouse_labels}
-            nx.draw_networkx_labels(G, label_pos, labels=warehouse_labels, 
-                                   font_size=9, font_weight='normal')
+            # Calculate the midpoint
+            mid_x = (x1 + x2) / 2
+            mid_y = (y1 + y2) / 2
             
-            # Draw market metric labels
-            label_pos = {n: (pos[n][0], pos[n][1] - 0.05) for n in market_labels}
-            nx.draw_networkx_labels(G, label_pos, labels=market_labels, 
-                                   font_size=9, font_weight='normal')
+            # Create the label text
+            if data.get('edge_type') == 'supply':
+                label_text = f"Supply: {data['weight']:.0f}"
+            else:  # sell_in
+                label_text = f"Sell-In: {data['weight']:.0f}"
+                if 'lead_time' in data and data['lead_time'] > 0:
+                    label_text += f"\nLT: {data['lead_time']:.1f}"
             
-            # Add edge labels (flow volumes)
-            edge_labels = {}
-            for u, v, data in G.edges(data=True):
-                if 'weight' in data:
-                    if data.get('edge_type') == 'supply':
-                        edge_labels[(u, v)] = f"Supply: {data['weight']:.1f}"
-                    else:  # sell_in
-                        edge_labels[(u, v)] = f"Sell-in: {data['weight']:.1f}"
-                        if 'lead_time' in data and data['lead_time'] > 0:
-                            edge_labels[(u, v)] += f"\nLT: {data['lead_time']:.1f}"
+            # Position the label above the edge with a fixed offset
+            label_y_offset = 0.01  # Increased offset to ensure visibility
             
-            nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_size=8, alpha=0.7)
+            # Draw the label with a white background
+            plt.text(mid_x, mid_y + label_y_offset, label_text,
+                    horizontalalignment='center',
+                    verticalalignment='center',
+                    fontsize=14,  # REDUCED SIZE
+                    fontweight='bold',
+                    bbox=dict(boxstyle='round,pad=0.4', fc='white', alpha=1.0, ec='black', linewidth=1.5))
         
         # Add a title with information about the visualization
         title = "Supply Chain Network"
@@ -352,25 +233,212 @@ class Plotter:
             title += f" - Product: {product}"
         if week:
             title += f" - Week: {week}"
-        title += f"\nNode Size: {node_size_metric}, Edge Width: {edge_width_metric}"
         
-        plt.title(title, fontsize=16, pad=20)
+        plt.title(title, fontsize=20, pad=20)  # INCREASED SIZE
         
-        # Add a legend
-        legend_elements = [
-            Line2D([0], [0], marker='o', color='w', markerfacecolor=self.color_palette['plant'], 
-                  markersize=15, label='Plants'),
-            Line2D([0], [0], marker='o', color='w', markerfacecolor=self.color_palette['warehouse'], 
-                  markersize=15, label='Warehouses'),
-            Line2D([0], [0], marker='o', color='w', markerfacecolor=self.color_palette['market'], 
-                  markersize=15, label='Markets')
-        ]
-        
-        plt.legend(handles=legend_elements, loc='best')
         plt.axis('off')
         plt.tight_layout()
         
-        return plt.gcf()
+        return fig
+
+    def plot_multiple_networks(self, show_inventory=True, show_safety_stock=True, show_lead_time=True, figsize=(16, 12)):
+        """
+        Plots a combined network visualization for all products with centered layout.
+        This includes the average supply, sell_in, and lead_time values aggregated across all products.
+        
+        Args:
+            show_inventory (bool): Whether to show inventory information on warehouse nodes
+            show_safety_stock (bool): Whether to show safety stock information on warehouse nodes
+            show_lead_time (bool): Whether to show lead time information on market nodes
+            figsize (tuple): Figure dimensions (width, height)
+            
+        Returns:
+            matplotlib.figure.Figure: The network visualization figure
+        """
+        import numpy as np  # Make sure numpy is imported
+        
+        # Create a directed graph
+        G = nx.DiGraph()
+        
+        # Calculate average inventory per warehouse
+        avg_inventory = self.df.groupby('warehouse')['inventory'].mean().to_dict() if show_inventory else {}
+        
+        # Calculate average safety stock per warehouse if available
+        avg_safety_stock = {}
+        if 'safety_stock' in self.df.columns and show_safety_stock:
+            avg_safety_stock = self.df.groupby('warehouse')['safety_stock'].mean().to_dict()
+        
+        # Get unique plants, warehouses, and markets
+        plants = sorted(self.df['plant'].unique())
+        warehouses = sorted(self.df['warehouse'].unique())
+        markets = sorted(self.df['market'].unique())
+        
+        # Add nodes to the graph
+        for plant in plants:
+            G.add_node(plant, node_type='plant')
+        for warehouse in warehouses:
+            G.add_node(warehouse, node_type='warehouse')
+        for market in markets:
+            G.add_node(market, node_type='market')
+        
+        # Calculate average flows between nodes
+        plant_to_warehouse_flow = {}
+        for plant in plants:
+            for warehouse in warehouses:
+                flow_data = self.df[(self.df['plant'] == plant) & (self.df['warehouse'] == warehouse)]
+                if not flow_data.empty:
+                    avg_flow = flow_data['supply'].mean()
+                    plant_to_warehouse_flow[(plant, warehouse)] = avg_flow
+                    G.add_edge(plant, warehouse, weight=avg_flow, edge_type='supply')
+        
+        warehouse_to_market_flow = {}
+        warehouse_to_market_lead_time = {}
+        for warehouse in warehouses:
+            for market in markets:
+                flow_data = self.df[(self.df['warehouse'] == warehouse) & (self.df['market'] == market)]
+                if not flow_data.empty:
+                    avg_flow = flow_data['sell_in'].mean()
+                    warehouse_to_market_flow[(warehouse, market)] = avg_flow
+                    
+                    if 'lead_time' in flow_data.columns and show_lead_time:
+                        avg_lead_time = flow_data['lead_time'].mean()
+                        warehouse_to_market_lead_time[(warehouse, market)] = avg_lead_time
+                        G.add_edge(warehouse, market, weight=avg_flow, lead_time=avg_lead_time, edge_type='sell_in')
+                    else:
+                        G.add_edge(warehouse, market, weight=avg_flow, edge_type='sell_in')
+        
+        # Create custom layout with plants on left, warehouses in middle, markets on right
+        pos = {}
+        # Position plants on the left
+        for i, plant in enumerate(plants):
+            pos[plant] = (0.1, 0.9 - (i * 0.8 / max(len(plants), 1)))
+            
+        # Position warehouses in the middle
+        for i, warehouse in enumerate(warehouses):
+            pos[warehouse] = (0.5, 0.9 - (i * 0.8 / max(len(warehouses), 1)))
+            
+        # Position markets on the right
+        for i, market in enumerate(markets):
+            pos[market] = (0.9, 0.9 - (i * 0.8 / max(len(markets), 1)))
+        
+        # Create the figure
+        fig = plt.figure(figsize=figsize)
+        
+        # Draw nodes with different colors based on node type
+        node_sizes = {
+            'plant': 8000,      # INCREASED SIZE MORE
+            'warehouse': 8000,  # INCREASED SIZE MORE
+            'market': 8000      # INCREASED SIZE MORE
+        }
+        
+        # Draw plants
+        nx.draw_networkx_nodes(G, pos, 
+                            nodelist=plants, 
+                            node_color=self.color_palette['plant'],
+                            node_size=node_sizes['plant'],
+                            alpha=0.8,
+                            edgecolors='black',
+                            linewidths=2)
+        
+        # Draw warehouses
+        nx.draw_networkx_nodes(G, pos, 
+                            nodelist=warehouses, 
+                            node_color=self.color_palette['warehouse'],
+                            node_size=node_sizes['warehouse'],
+                            alpha=0.8,
+                            edgecolors='black',
+                            linewidths=2)
+        
+        # Draw markets
+        nx.draw_networkx_nodes(G, pos, 
+                            nodelist=markets, 
+                            node_color=self.color_palette['market'],
+                            node_size=node_sizes['market'],
+                            alpha=0.8,
+                            edgecolors='black',
+                            linewidths=2)
+        
+        # Draw edges with appropriate styles
+        supply_edges = [(u, v) for u, v, data in G.edges(data=True) if data.get('edge_type') == 'supply']
+        sell_in_edges = [(u, v) for u, v, data in G.edges(data=True) if data.get('edge_type') == 'sell_in']
+        
+        # OPTION 1: Draw with straight lines
+        # Draw supply edges with straight lines
+        nx.draw_networkx_edges(G, pos, 
+                            edgelist=supply_edges,
+                            width=2.0,
+                            edge_color='gray',
+                            alpha=0.7,
+                            arrowstyle='-|>',
+                            arrowsize=20,
+                            connectionstyle='arc3,rad=0.0')  # Changed from 0.1 to 0.0
+        
+        # Draw sell-in edges with straight lines
+        nx.draw_networkx_edges(G, pos, 
+                            edgelist=sell_in_edges,
+                            width=2.0,
+                            edge_color='gray',
+                            alpha=0.7,
+                            arrowstyle='-|>',
+                            arrowsize=20,
+                            connectionstyle='arc3,rad=0.0')  # Changed from 0.1 to 0.0
+        
+        # Draw node labels
+        nx.draw_networkx_labels(G, pos, font_size=16, font_weight='bold')
+        
+        # Create labels for warehouses with inventory and safety stock
+        warehouse_labels = {}
+        for warehouse in warehouses:
+            label_parts = []
+            if warehouse in avg_inventory and show_inventory:
+                label_parts.append(f"Inv: {avg_inventory[warehouse]:.0f}")
+            if warehouse in avg_safety_stock and show_safety_stock:
+                label_parts.append(f"SS: {avg_safety_stock[warehouse]:.0f}")
+            
+            if label_parts:
+                warehouse_labels[warehouse] = "\n".join(label_parts)
+        
+        # Draw warehouse labels
+        label_pos = {n: (pos[n][0], pos[n][1] - 0.05) for n in warehouse_labels}
+        nx.draw_networkx_labels(G, label_pos, labels=warehouse_labels, 
+                            font_size=14, font_weight='normal')
+        
+        # Add edge labels with improved positioning for straight lines
+        for u, v, data in G.edges(data=True):
+            # Calculate the midpoint of the edge
+            x1, y1 = pos[u]
+            x2, y2 = pos[v]
+            
+            # For straight lines, midpoint calculation is simple
+            mid_x = (x1 + x2) / 2
+            mid_y = (y1 + y2) / 2
+            
+            # Position the label above the edge with a fixed offset
+            label_y_offset = 0.01 # Increased offset to ensure visibility
+            
+            # Create the label text
+            if data.get('edge_type') == 'supply':
+                label_text = f"Supply: {data['weight']:.0f}"
+            else:  # sell_in
+                label_text = f"Sell-In: {data['weight']:.0f}"
+                if 'lead_time' in data and show_lead_time:
+                    label_text += f"\nLT: {data['lead_time']:.1f}"
+            
+            # Draw the label with a white background
+            plt.text(mid_x, mid_y + label_y_offset, label_text,
+                    horizontalalignment='center',
+                    verticalalignment='center',
+                    fontsize=14,
+                    fontweight='bold',
+                    bbox=dict(boxstyle='round,pad=0.4', fc='white', alpha=1.0, ec='black', linewidth=1.5))
+        
+        # Add a title
+        plt.title("Aggregated Supply Chain Network", fontsize=20, pad=20)
+        
+        plt.axis('off')
+        plt.tight_layout()
+        
+        return fig
     
     def plot_inventory_time_series(self, warehouses=None, products=None, metrics=None, 
                                    start_week=None, end_week=None, figsize=(14, 8)):
@@ -429,10 +497,12 @@ class Plotter:
         n_cols = min(3, n_combinations)
         n_rows = (n_combinations + n_cols - 1) // n_cols
         
-        # Create the figure
-        fig, axes = plt.subplots(n_rows, n_cols, figsize=figsize, sharex=True)
+        # Create the figure with adjusted height-to-width ratio (less vertical)
+        fig_width = figsize[0]
+        fig_height = fig_width * 0.75 * n_rows / n_cols  # Reduce height for less vertical plots
+        fig, axes = plt.subplots(n_rows, n_cols, figsize=(fig_width, fig_height), sharex=True)
         
-        # Flatten axes array for easier indexing
+        # Ensure axes is always a list/array
         if n_combinations > 1:
             axes = axes.flatten()
         else:
@@ -452,301 +522,34 @@ class Plotter:
             
             ax = axes[i]
             
-            # Plot each metric
+            # Plot each metric with reduced marker size and thinner lines
             for metric in metrics:
                 if metric in combo_data.columns:
                     ax.plot(combo_data['week'], combo_data[metric], 
                            marker='o', 
+                           markersize=4,  # Smaller markers
+                           linewidth=1.5,  # Thinner lines
                            linestyle='-', 
                            label=metric.replace('_', ' ').title(),
                            color=self.color_palette.get(metric, None))
             
-            ax.set_title(f"{warehouse} - {product}", fontsize=10)
-            ax.set_xlabel('Week')
-            ax.set_ylabel('Units')
+            ax.set_title(f"{warehouse} - {product}", fontsize=12)
+            ax.set_xlabel('Week', fontsize=10)
+            ax.set_ylabel('Units', fontsize=10)
             ax.grid(True, alpha=0.3)
-            ax.legend(loc='best', fontsize=8)
+            ax.legend(loc='best', fontsize=9)
         
         # Hide unused subplots
         for j in range(i + 1, len(axes)):
             axes[j].set_visible(False)
         
         plt.tight_layout()
-        plt.suptitle('Inventory and Supply Chain Metrics Over Time', fontsize=16, y=1.02)
+        plt.suptitle('Inventory and Supply Chain Metrics Over Time', fontsize=18, y=1.02)
         
         return fig
-    
-    def plot_multiple_networks(self, show_inventory=True, show_safety_stock=True, show_lead_time=True):
-        """
-        Plots a combined network visualization for all products with centered layout.
-        This includes the average supply, sell_in, and lead_time values aggregated across all products.
-        
-        Args:
-            show_inventory (bool): Whether to show inventory information on warehouse nodes
-            show_safety_stock (bool): Whether to show safety stock information on warehouse nodes
-            show_lead_time (bool): Whether to show lead time information on market nodes
-            
-        Returns:
-            matplotlib.figure.Figure: The network visualization figure
-        """
-        # Create a directed graph
-        G = nx.DiGraph()
-
-        # Calculate average inventory, safety stock, and lead time per warehouse/market
-        avg_inventory = self.df.groupby('warehouse')['inventory'].mean().to_dict() if show_inventory else {}
-        avg_safety_stock = (self.df.groupby('warehouse')['safety_stock'].mean().to_dict() 
-                           if 'safety_stock' in self.df.columns and show_safety_stock else {})
-        avg_lead_time = (self.df.groupby(['warehouse', 'market'])['lead_time'].mean().reset_index() 
-                        if 'lead_time' in self.df.columns and show_lead_time else pd.DataFrame())
-
-        # Add nodes and calculate average supply and sell_in for all connections
-        for _, row in self.df.iterrows():
-            plant = row['plant']
-            warehouse = row['warehouse']
-            market = row['market']
-            
-            # Add nodes to the graph
-            G.add_node(plant, node_type='plant')
-            G.add_node(warehouse, node_type='warehouse')
-            G.add_node(market, node_type='market')
-
-            # Add edges with average supply
-            if not G.has_edge(plant, warehouse):
-                G.add_edge(plant, warehouse, supply_list=[], sell_in_list=[])
-            G.edges[plant, warehouse]['supply_list'].append(row['supply'])
-
-            # Add edges with average sell_in
-            if not G.has_edge(warehouse, market):
-                G.add_edge(warehouse, market, supply_list=[], sell_in_list=[])
-            G.edges[warehouse, market]['sell_in_list'].append(row['sell_in'])
-            
-            # Add lead time to the edge if it exists
-            if 'lead_time' in row and not pd.isna(row['lead_time']):
-                if 'lead_time_list' not in G.edges[warehouse, market]:
-                    G.edges[warehouse, market]['lead_time_list'] = []
-                G.edges[warehouse, market]['lead_time_list'].append(row['lead_time'])
-
-        # Calculate average values for edge labels
-        for u, v, data in G.edges(data=True):
-            avg_supply = np.mean(data['supply_list']) if 'supply_list' in data and data['supply_list'] else 0
-            avg_sell_in = np.mean(data['sell_in_list']) if 'sell_in_list' in data and data['sell_in_list'] else 0
-            avg_lead_time = np.mean(data['lead_time_list']) if 'lead_time_list' in data and data['lead_time_list'] else 0
-            
-            label = []
-            if avg_supply > 0:
-                label.append(f"Supply: {avg_supply:.1f}")
-            if avg_sell_in > 0:
-                label.append(f"Sell-In: {avg_sell_in:.1f}")
-            if avg_lead_time > 0 and show_lead_time:
-                label.append(f"LT: {avg_lead_time:.1f}")
-            
-            data['label'] = "\n".join(label)
-            data['weight'] = max(avg_supply, avg_sell_in)  # Use the larger value for edge width
-
-        # Get unique nodes for plants, warehouses, and markets
-        plants = sorted(self.df['plant'].unique())
-        warehouses = sorted(self.df['warehouse'].unique())
-        markets = sorted(self.df['market'].unique())
-
-        # Calculate positions with improved spacing
-        pos = {}
-        plant_x, warehouse_x, market_x = 0.1, 0.5, 0.9
-        
-        # Calculate vertical positions with better distribution
-        max_nodes = max(len(plants), len(warehouses), len(markets))
-        
-        # Set vertical spacing based on node count (more nodes = less spacing)
-        vertical_spacing = 0.8 / max(max_nodes, 1)
-        
-        # Position plants
-        plant_start = 0.1 + (0.8 - (len(plants) - 1) * vertical_spacing) / 2
-        for i, plant in enumerate(plants):
-            pos[plant] = (plant_x, plant_start + i * vertical_spacing)
-
-        # Position warehouses
-        warehouse_start = 0.1 + (0.8 - (len(warehouses) - 1) * vertical_spacing) / 2
-        for i, warehouse in enumerate(warehouses):
-            pos[warehouse] = (warehouse_x, warehouse_start + i * vertical_spacing)
-
-        # Position markets
-        market_start = 0.1 + (0.8 - (len(markets) - 1) * vertical_spacing) / 2
-        for i, market in enumerate(markets):
-            pos[market] = (market_x, market_start + i * vertical_spacing)
-
-        # Create the figure with responsive sizing
-        fig = plt.figure(figsize=(16, 10))
-        
-        # Draw nodes with type-based colors and improved styling 
-        node_sizes = {
-            'plant': 7000,
-            'warehouse': 7000,
-            'market': 7000 
-        }
-        
-        # Draw plants
-        nx.draw_networkx_nodes(G, pos, 
-                              nodelist=plants, 
-                              node_color=self.color_palette['plant'],
-                              node_size=node_sizes['plant'], 
-                              alpha=0.8,
-                              edgecolors='black',
-                              linewidths=2)
-        
-        # Draw warehouses
-        nx.draw_networkx_nodes(G, pos, 
-                              nodelist=warehouses, 
-                              node_color=self.color_palette['warehouse'],
-                              node_size=node_sizes['warehouse'], 
-                              alpha=0.8,
-                              edgecolors='black',
-                              linewidths=2)
-        
-        # Draw markets
-        nx.draw_networkx_nodes(G, pos, 
-                              nodelist=markets, 
-                              node_color=self.color_palette['market'],
-                              node_size=node_sizes['market'], 
-                              alpha=0.8,
-                              edgecolors='black',
-                              linewidths=2)
-
-        # Calculate edge widths based on weights
-        weights = [G.edges[u, v]['weight'] for u, v in G.edges()]
-        max_weight = max(weights) if weights else 1
-        
-        # Scale edge widths between 1 and 5 based on the weight
-        edge_widths = [1 + 4 * (G.edges[u, v]['weight'] / max_weight) for u, v in G.edges()]
-        
-        # Draw edges with improved styling
-        nx.draw_networkx_edges(G, pos, 
-                              width=edge_widths,
-                              edge_color='gray',
-                              alpha=0.7,
-                              arrowstyle='-|>',
-                              arrowsize=20,
-                              connectionstyle='arc3,rad=0.1')  # Curved edges for better visibility
-
-        # Draw node labels with improved styling
-        nx.draw_networkx_labels(G, pos, font_size=15, font_weight='bold')
-
-        # Prepare warehouse labels with inventory and safety stock info
-        warehouse_labels = {}
-        for warehouse in warehouses:
-            label_parts = []
-            
-            if warehouse in avg_inventory and show_inventory:
-                label_parts.append(f"Inventory: {avg_inventory[warehouse]:.1f}")
-            
-            if warehouse in avg_safety_stock and show_safety_stock:
-                label_parts.append(f"Safety Stock: {avg_safety_stock[warehouse]:.1f}")
-            
-            if label_parts:
-                warehouse_labels[warehouse] = "\n".join(label_parts)
-        
-        # Draw warehouse labels with better positioning - INCREASED FONT SIZE & ADJUSTED POSITION
-        warehouse_label_pos = {wh: (pos[wh][0], pos[wh][1] - 0.08) for wh in warehouse_labels}
-        nx.draw_networkx_labels(G, warehouse_label_pos, labels=warehouse_labels, 
-                               font_size=13, font_weight='normal')
-
-        # Draw edge labels with improved positioning and formatting - INCREASED FONT SIZE
-        edge_label_pos = 0.3  # Adjust this for label positioning on edges
-        nx.draw_networkx_edge_labels(G, pos, 
-                                    edge_labels={edge: data['label'] for edge, data in G.edges.items() if data['label']},
-                                    label_pos=edge_label_pos, 
-                                    font_size=12,
-                                    bbox=dict(boxstyle='round,pad=0.3', fc='white', alpha=0.8),
-                                    rotate=False)
-
-        # Create a custom legend
-        legend_elements = [
-            mpatches.Patch(color=self.color_palette['plant'], label='Plants'),
-            mpatches.Patch(color=self.color_palette['warehouse'], label='Warehouses'),
-            mpatches.Patch(color=self.color_palette['market'], label='Markets'),
-        ]
-        
-        if show_inventory:
-            legend_elements.append(Line2D([0], [0], color='black', lw=2, label='Flow Direction'))
-        
-        plt.legend(handles=legend_elements, loc='best', fontsize=14)
-
-        # Title and styling
-        plt.title("Aggregated Supply Chain Network", fontsize=20, pad=20, fontweight='bold')
-        plt.axis('off')
-        plt.tight_layout()
-        
-        # Fix to prevent showing the plot twice - return fig directly instead of using plt.gcf()
-        plt.close()  # Close the current figure to prevent double display
-        return fig
-    
-    def plot_inventory_heatmap(self, metric='inventory', groupby=None, normalize=False, figsize=(14, 10)):
-        """
-        Create a heatmap visualization of inventory or other metrics across the supply chain.
-        
-        Args:
-            metric (str): Metric to visualize ('inventory', 'safety_stock', 'supply', 'sell_in', etc.)
-            groupby (list, optional): Dimensions to group by (default: ['warehouse', 'product'])
-            normalize (bool): Whether to normalize values (useful for comparing different metrics)
-            figsize (tuple): Figure dimensions (width, height)
-            
-        Returns:
-            matplotlib.figure.Figure: The heatmap visualization figure
-        """
-        # Default groupby if not specified
-        if groupby is None:
-            groupby = ['warehouse', 'product']
-        
-        # Ensure the metric exists in the DataFrame
-        if metric not in self.df.columns:
-            raise ValueError(f"Metric '{metric}' not found in the DataFrame. Available metrics: {list(self.df.columns)}")
-        
-        # Group data and calculate mean of the metric
-        pivot_data = self.df.groupby(groupby)[metric].mean().reset_index()
-        
-        # Check if we have enough dimensions for a heatmap
-        if len(groupby) < 2:
-            raise ValueError("Need at least 2 dimensions for groupby to create a heatmap")
-        
-        # Create a pivot table for the heatmap
-        pivot_table = pivot_data.pivot(index=groupby[0], columns=groupby[1], values=metric)
-        
-        # Normalize if requested
-        if normalize:
-            pivot_table = (pivot_table - pivot_table.min().min()) / (pivot_table.max().max() - pivot_table.min().min())
-        
-        # Create the figure
-        plt.figure(figsize=figsize)
-        
-        # Create a custom colormap from light to dark in the metric's color
-        base_color = self.color_palette.get(metric, '#4285F4')  # Default to blue if color not found
-        cmap = LinearSegmentedColormap.from_list(
-            f"{metric}_cmap", 
-            ['#FFFFFF', base_color]
-        )
-        
-        # Create the heatmap
-        ax = sns.heatmap(pivot_table, 
-                        annot=True, 
-                        fmt='.1f' if not normalize else '.2f', 
-                        cmap=cmap,
-                        cbar_kws={'label': metric.replace('_', ' ').title()},
-                        linewidths=0.5,
-                        square=True)
-        
-        # Adjust labels and title
-        plt.title(f"{metric.replace('_', ' ').title()} Heatmap by {groupby[0].title()} and {groupby[1].title()}", 
-                fontsize=16, pad=20)
-        plt.ylabel(groupby[0].replace('_', ' ').title())
-        plt.xlabel(groupby[1].replace('_', ' ').title())
-        
-        # Rotate x-axis labels if there are many
-        if len(pivot_table.columns) > 5:
-            plt.xticks(rotation=45, ha='right')
-        
-        plt.tight_layout()
-        return plt.gcf()
     
     def plot_optimization_comparison(self, before_df, after_df, metrics=['inventory', 'supply'], 
-                                    groupby='warehouse', figsize=(14, 8)):
+                                     groupby='warehouse', figsize=(14, 8)):
         """
         Create bar charts comparing before and after optimization for key metrics.
         

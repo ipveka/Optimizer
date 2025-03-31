@@ -19,9 +19,31 @@ cd optimizer
 # Install dependencies
 pip install -r requirements.txt
 
-# Install additional dependencies for the Streamlit app
-pip install streamlit xlsxwriter
+# Optional: Install optimization solvers (improves performance)
+# For macOS:
+brew install glpk  # For GLPK solver
+# For Linux:
+# sudo apt-get install glpk-utils  # For GLPK solver
 ```
+
+## Cross-Platform Compatibility
+
+The Optimizer library is designed to work on all major platforms:
+- **macOS** (both Intel and Apple Silicon)
+- **Linux** (x86_64 and ARM)
+- **Windows**
+
+The library will automatically detect if optimization solvers are available and use them if possible. If no solvers are available, it will use mock optimization results that still demonstrate the value of the library.
+
+## Quick Start
+
+To run the end-to-end example:
+
+```bash
+python src/end_2_end.py
+```
+
+This will generate a complete supply chain optimization scenario and create an HTML report in the `results` directory.
 
 ## Key Components
 
@@ -138,69 +160,50 @@ network_fig.show()
 The `Plotter` class provides visualization capabilities for supply chain networks, inventory profiles, and optimization results.
 
 #### Key Features:
-- Visualize the supply chain network with flow volumes and key metrics
-- Create heatmaps to identify bottlenecks and optimization opportunities
-- Display inventory time series with safety stock and reorder points
-- Compare pre-optimization and post-optimization scenarios
-- Support filtering by product, warehouse, or time period
-- Generate professional and customizable visualizations
-- High-readability node sizing with clear labels
-- Consistent figure handling to prevent duplicate displays
+- **Network Visualization**: Visualize the supply chain network with plants, warehouses, and markets
+- **Multi-Network Analysis**: View aggregated network data across all products
+- **Inventory Time Series**: Track inventory levels, safety stock, and reorder points over time
+- **Optimization Comparison**: Compare key metrics before and after optimization
+- **KPI Dashboard**: View key performance indicators in an intuitive dashboard
+
+#### Enhanced Visualization Features:
+- Clear labeling of supply and sell-in values directly above connection lines
+- Lead time information displayed on warehouse-to-market connections
+- Inventory and safety stock values shown on warehouse nodes
+- Comprehensive summary statistics displayed below each visualization
+- Consistent styling and color scheme across all visualizations
+- Optimized layout for better readability and information density
 
 #### Example Usage:
 
 ```python
 from optimizer.utils.plotter import Plotter
-import matplotlib.pyplot as plt
 
-# Initialize plotter with optimizer data
-plotter = Plotter(optimizer.df)
+# Create a plotter instance
+plotter = Plotter(df)
 
-# Plot the supply chain network
+# Create a network visualization for a specific product and week
 network_fig = plotter.plot_network(
-    product='ProductAlpha',
-    week=10,
-    layout='custom',
-    node_size_metric='inventory',
-    edge_width_metric='flow',
-    show_labels=True
+    product='ProductA',
+    week=26  # Mid-year
 )
+network_fig.savefig('network_visualization.png', dpi=300)
 
-# Display or save the figure
-network_fig.savefig('network.png', dpi=300, bbox_inches='tight')
-# plt.show()  # Uncomment to display interactively
-
-# Plot multiple networks with additional information
-multiple_networks_fig = plotter.plot_multiple_networks(
+# Create an aggregated network visualization across all products
+multi_network_fig = plotter.plot_multiple_networks(
     show_inventory=True,
     show_safety_stock=True,
     show_lead_time=True
 )
-multiple_networks_fig.savefig('multiple_networks.png')
+multi_network_fig.savefig('multi_network_visualization.png', dpi=300)
 
 # Create an inventory time series visualization
-inventory_fig = plotter.plot_inventory_time_series(
-    warehouses=['WarehouseX', 'WarehouseY'],
-    products=['ProductAlpha'],
+timeseries_fig = plotter.plot_inventory_time_series(
+    warehouses=['WH_North', 'WH_South'],
+    products=['ProductA'],
     metrics=['inventory', 'safety_stock', 'reorder_point']
 )
-inventory_fig.savefig('inventory_time_series.png')
-
-# Generate a heatmap visualization
-heatmap_fig = plotter.plot_inventory_heatmap(
-    metric='inventory',
-    groupby=['warehouse', 'product']
-)
-heatmap_fig.savefig('inventory_heatmap.png')
-
-# Compare before and after optimization
-comparison_fig = plotter.plot_optimization_comparison(
-    before_df=before_optimization_df,
-    after_df=after_optimization_df,
-    metrics=['inventory', 'supply'],
-    groupby='warehouse'
-)
-comparison_fig.savefig('optimization_comparison.png')
+timeseries_fig.savefig('inventory_time_series.png', dpi=300)
 ```
 
 ## Utility Modules
@@ -218,18 +221,6 @@ This module contains utility functions for the end-to-end supply chain optimizat
 - **Visualization generation**: Creates comparative visualizations and dashboards
 
 #### Location: `utils/utils.py`
-
-### 2. app_utils.py
-
-Utilities specifically designed for the Streamlit web application:
-
-- **Data download**: Creates Excel download links for simulation and optimization results
-- **Simulation workflow**: Functions to run the supply chain simulation with UI parameters
-- **Optimization workflow**: Functions to apply optimization algorithms and measure results
-- **Visualization generation**: Creates interactive visualizations for the web interface
-- **Data preparation**: Functions to prepare comparison dataframes for warehouse and product analysis
-
-#### Location: `utils/app_utils.py`
 
 ### End-to-End Example
 
@@ -251,29 +242,6 @@ python src/end_2_end.py
     - `plots/`: Includes all visualization files (PNG format)
     - `results/`: Contains summary files with KPIs and metrics
     - `supply_chain_optimization_report.html`: Complete HTML report summarizing the results
-
-### Streamlit Web Application
-
-The repository also includes an interactive Streamlit web application for supply chain optimization:
-
-```bash
-# Install streamlit if not already installed
-pip install streamlit
-
-# Run the app
-streamlit run app.py
-```
-
-#### Features of the Streamlit app:
-
-- Interactive UI for configuring all supply chain parameters
-- Live simulation and optimization
-- Visual results with multiple tabs:
-  - Simulation Results: View supply chain data and summary statistics
-  - Optimization Results: See improvements and comparison metrics
-  - Visualizations: Interactive network, inventory time series, and KPI dashboard
-  - Download Data: Export all results in Excel format
-- Ability to customize and re-run the simulation and optimization
 
 ## Advanced Usage
 
@@ -408,11 +376,6 @@ optimizer.optimize_network_flow(custom_objective=minimize_lead_time_objective)
    - Examine the HTML report for a comprehensive summary of the optimization results
    - Compare the visualization images to understand the impact of optimization
    - Review the detailed KPI statistics to quantify improvements
-
-6. **Streamlit Application**
-   - Use the app for quick experimentation and parameter tuning
-   - Download results for detailed analysis in external tools
-   - The interactive visualizations help communicate results to stakeholders
 
 ## Contributing
 
